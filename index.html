@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Day 21: React Wikipedia Search</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+</head>
+<body class="bg-gray-100 flex justify-center p-4 sm:p-8">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+
+        // Wikipedia's API is free and doesn't require a key.
+        const WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php?action=opensearch&origin=*&search=";
+
+        // --- Child Component ---
+        const SearchResult = ({ title, description, link }) => (
+            <a
+                href={link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block bg-white p-4 rounded-lg shadow-sm hover:shadow-md hover:bg-blue-50 transition-all"
+            >
+                <h3 className="font-bold text-blue-600 text-lg">{title}</h3>
+                <p className="text-gray-600">{description}</p>
+            </a>
+        );
+        
+        // --- Main App Component ---
+        const App = () => {
+            const [searchTerm, setSearchTerm] = React.useState('React (JavaScript library)');
+            const [results, setResults] = React.useState([]);
+            const [loading, setLoading] = React.useState(false);
+
+            // --- The `useEffect` Hook for Data Fetching ---
+            React.useEffect(() => {
+                // AbortController to cancel fetch requests.
+                const controller = new AbortController();
+                const signal = controller.signal;
+
+                const searchWikipedia = async () => {
+                    if (searchTerm.trim() === '') {
+                        setResults([]);
+                        return;
+                    }
+
+                    setLoading(true);
+                    try {
+                        const response = await fetch(`${WIKIPEDIA_API_URL}${searchTerm}`, { signal });
+                        const data = await response.json();
+                        
+                        // The Wikipedia API returns data in a specific array format:
+                        // data[0] = search term
+                        // data[1] = array of titles
+                        // data[2] = array of descriptions
+                        // data[3] = array of links
+                        const formattedResults = data[1].map((title, index) => ({
+                            title: title,
+                            description: data[2][index],
+                            link: data[3][index]
+                        }));
+                        setResults(formattedResults);
+
+                    } catch (error) {
+                        if (error.name === 'AbortError') {
+                            console.log('Fetch aborted');
+                        } else {
+                            console.error("Failed to fetch Wikipedia data:", error);
+                        }
+                    }
+                    setLoading(false);
+                };
+
+                // Use a timeout to "debounce" the search, so there will not be an API call on every keystroke.
+                const timeoutId = setTimeout(() => {
+                    searchWikipedia();
+                }, 500);
+
+                return () => {
+                    clearTimeout(timeoutId);
+                    controller.abort(); // Cancel the fetch request
+                };
+
+            }, [searchTerm]); // Re-run the effect whenever the `searchTerm` changes.
+
+            return (
+                <div className="w-full max-w-2xl">
+                    <div className="bg-white rounded-xl shadow-2xl p-6">
+                        <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">Wikipedia Search</h1>
+                        <p className="text-center text-gray-500 mb-6">Search for articles on Wikipedia in real-time.</p>
+                        
+                        <div className="relative mb-6">
+                            <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            <input
+                                type="text"
+                                placeholder="Search Wikipedia..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full bg-gray-100 border-2 border-transparent rounded-lg py-3 pl-12 pr-4 focus:outline-none focus:border-blue-500 transition-colors"
+                            />
+                        </div>
+
+                        {/* Results List */}
+                        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                           {loading ? (
+                                <p className="text-center text-gray-500 py-4">
+                                    <i className="fas fa-spinner fa-spin mr-2"></i> Searching...
+                                </p>
+                           ) : results.length > 0 ? (
+                                results.map(result => (
+                                    <SearchResult key={result.link} {...result} />
+                                ))
+                           ) : (
+                                <p className="text-center text-gray-500 py-4">No results found.</p>
+                           )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Rendering the App ---
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+
+</body>
+</html>
